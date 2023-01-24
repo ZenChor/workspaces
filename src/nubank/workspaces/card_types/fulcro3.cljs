@@ -15,7 +15,8 @@
     [nubank.workspaces.data :as data]
     [nubank.workspaces.model :as wsm]
     [nubank.workspaces.ui :as ui]
-    [nubank.workspaces.ui.core :as uc]))
+    [nubank.workspaces.ui.core :as uc]
+    ["react-dom" :as ReactDOM]))
 
 ; region portal
 
@@ -133,7 +134,7 @@
      (let [app (gobj/get this "app")]
        (dispose-app app)
        (reset! app nil)
-       (js/ReactDOM.unmountComponentAtNode (dom/node this))))
+       (ReactDOM.unmountComponentAtNode (dom/node this))))
 
    :shouldComponentUpdate
    (fn [this _ _] false)}
@@ -183,7 +184,7 @@
       {::wsm/dispose
        (fn [node]
          (dispose-app app)
-         (js/ReactDOM.unmountComponentAtNode node))
+         (ReactDOM.unmountComponentAtNode node))
 
        ::wsm/refresh
        (fn [_]
