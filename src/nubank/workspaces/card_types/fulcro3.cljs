@@ -8,6 +8,7 @@
     [com.fulcrologic.fulcro.components :as fc]
     [com.fulcrologic.fulcro.dom :as dom]
     [com.fulcrologic.fulcro.inspect.inspect-client :as fi.client]
+    [com.fulcrologic.fulcro.react.version18 :refer [with-react18]]
     [goog.functions :as gfun]
     [goog.object :as gobj]
     [nubank.workspaces.card-types.util :as ct.util]
@@ -91,7 +92,7 @@
                      app-id
                      (assoc-in [:initial-db :fulcro.inspect.core/app-id] app-id))
           ;; TASK: explicit initial state handling
-          instance (fapp/fulcro-app app)]
+          instance (with-react18 (fapp/fulcro-app app))]
       (if persistence-key (swap! persistent-apps* assoc persistence-key instance))
       instance)))
 

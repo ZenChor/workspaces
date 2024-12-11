@@ -1,12 +1,14 @@
 (ns nubank.workspaces.data
   (:require [com.fulcrologic.fulcro.application :as app]
+            [com.fulcrologic.fulcro.react.version18 :refer [with-react18]]
             [nubank.workspaces.ui.events :as events]))
 
-(defonce app* (app/fulcro-app
-                {:shared {}
-                 :client-did-mount
-                         (fn [app]
-                           (js/setTimeout #(events/trigger-event js/window {::events/event "resize"}) 600))}))
+(defonce app* (-> (app/fulcro-app
+                    {:shared {}
+                     :client-did-mount
+                     (fn [app]
+                       (js/setTimeout #(events/trigger-event js/window {::events/event "resize"}) 600))})
+                  with-react18))
 
 (defonce workspace-definitions* (atom {}))
 (defonce card-definitions* (atom {}))
