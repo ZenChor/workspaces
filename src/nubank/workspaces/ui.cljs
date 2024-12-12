@@ -1039,7 +1039,12 @@
     (events/dom-listener {::events/keystroke (get-keybinding ::keybinding-toggle-card-headers)
                           ::events/action    #(fm/set-value! this ::settings (update (::settings (comp/props this)) ::hide-card-header? not))})
     (events/dom-listener {::events/keystroke (get-keybinding ::keybinding-spotlight)
-                          ::events/action    (events/pd #(open-spotlight this))})
+                          ::events/action
+                          (fn [e]
+                            (js/console.log "Toggling spotlight:"
+                                            {:current-show-spotlight? show-spotlight?
+                                             :left-pane-visible? (::show-index? settings)})
+                            (events/pd #(open-spotlight this)))})
     (events/dom-listener {::events/event  "keydown"
                           ::events/action #(if (= (.-keyCode %) 18)
                                              (js/document.body.classList.add "cljs-workspaces-extended-views"))})
@@ -1056,6 +1061,10 @@
         (spotlight/spotlight
           (comp/computed spotlight
             {::spotlight/on-select (comp/get-state this :spotlight-select)}))))
+
+    (js/console.log "Index view state:"
+                    {:show-index? (::show-index? settings)
+                     :settings settings})
 
     (if (::show-index? settings)
       (let [{uis false tests true} (group-by (comp true? ::wsm/test?) cards)]
@@ -1127,7 +1136,8 @@
                 (dom/div :.nest-group
                   (mapv card-index-listing (sort-by ::wsm/card-id cards))))))))
       (dom/div :.menu-show
-        (dom/button :.index-action-button {:onClick #(comp/transact! this [`(toggle-index-view {})])}
+        (dom/button :.index-action-button {:style {:backgroundColor  "#404040" :color "#fff" :padding "6px 8px"}
+                                           :onClick #(comp/transact! this [`(toggle-index-view {})])}
           "»")))
     (dom/div :.workspaces
       (workspace-tabs ws-tabs))))
