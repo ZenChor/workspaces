@@ -5,10 +5,10 @@
             [com.fulcrologic.fulcro-css.localized-dom :as dom]
             [com.fulcrologic.fulcro.components :as fp]
             [nubank.workspaces.ui.events :as events]
-            ["react-dom" :as ReactDOM]))
+            ["react-dom" :refer (unstable_renderSubtreeIntoContainer unmountComponentAtNode)]))
 
 (defn render-subtree-into-container [parent c node]
-  (ReactDOM.unstable_renderSubtreeIntoContainer parent c node))
+  (unstable_renderSubtreeIntoContainer parent c node))
 
 (defn $ [s] (.querySelector js/document s))
 
@@ -34,7 +34,7 @@
    :componentWillUnmount
    (fn [this]
      (when-let [node (gobj/get this "node")]
-       (ReactDOM.unmountComponentAtNode node)
+       (unmountComponentAtNode node)
        (gdom/removeNode node)))
 
    :componentWillReceiveProps

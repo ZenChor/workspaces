@@ -6,7 +6,7 @@
 (fp/defsc Highlight [this {::keys [source language]}]
   {:componentDidMount
    (fn [this]
-     (hljs.highlightBlock (dom/node this)))}
+     (.highlightBlock hljs (dom/node this)))}
 
   (dom/pre {:className (or language "clojure")} source))
 
