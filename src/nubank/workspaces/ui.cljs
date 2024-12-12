@@ -680,7 +680,12 @@
 
 (comp/defsc WorkspaceContainer
   [this props {::keys [open-solo-card]}]
-  {:ident             (fn [] (workspace-ident props))
+  {:initial-state     (fn [{::keys [workspace-id] ::wsm/keys [card-id] :as params}]
+                        (cond
+                          workspace-id {::workspace-id (comp/get-initial-state Workspace params)}
+                          card-id {::wsm/card-id (comp/get-initial-state WorkspaceSoloCard params)}
+                          :else {}))
+   :ident             (fn [] (workspace-ident props))
    :query             (fn []
                         {::workspace-id (comp/get-query Workspace)
                          ::wsm/card-id  (comp/get-query WorkspaceSoloCard)})
@@ -703,7 +708,15 @@
 (def workspace-container (comp/factory WorkspaceContainer {:keyfn #(or (::workspace-id %) (::wsm/card-id %))}))
 
 (comp/defsc WorkspaceTabItem [_ props]
-  {:ident (fn [] (workspace-ident props))
+  {:initial-state (fn [{::keys [workspace-id workspace-title]
+                       ::wsm/keys [workspace-static? card-id] :as params}]
+                    (merge
+                      {::workspace-id workspace-id
+                       ::workspace-title (or workspace-title "")
+                       ::wsm/workspace-static? (boolean workspace-static?)
+                       ::wsm/card-id card-id}
+                      params))
+   :ident (fn [] (workspace-ident props))
    :query [::workspace-id ::workspace-title ::wsm/workspace-static? ::wsm/card-id]})
 
 (comp/defsc WorkspaceTabs
