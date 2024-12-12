@@ -5,10 +5,7 @@
             [com.fulcrologic.fulcro-css.localized-dom :as dom]
             [com.fulcrologic.fulcro.components :as fp]
             [nubank.workspaces.ui.events :as events]
-            ["react-dom" :refer (unstable_renderSubtreeIntoContainer unmountComponentAtNode)]))
-
-(defn render-subtree-into-container [parent c node]
-  (unstable_renderSubtreeIntoContainer parent c node))
+             ["react-dom" :as ReactDOM]))
 
 (defn $ [s] (.querySelector js/document s))
 
@@ -24,30 +21,31 @@
   (apply dom/div nil children))
 
 (fp/defsc Portal [this _]
-  {:componentDidMount
+  {:initLocalState (fn [_] {:mounted? false})
+
+   :componentDidMount
    (fn [this]
      (let [props (fp/props this)
-           node  (create-portal-node props)]
+           node (create-portal-node props)]
        (gobj/set this "node" node)
-       (render-subtree-into-container this (portal-render-children (fp/children this)) node)))
+       ; Force a re-render after the node is created
+       (fp/set-state! this {:mounted? true})))
 
    :componentWillUnmount
    (fn [this]
      (when-let [node (gobj/get this "node")]
-       (unmountComponentAtNode node)
        (gdom/removeNode node)))
 
-   :componentWillReceiveProps
-   (fn [this _]
-     (let [node (gobj/get this "node")]
-       (render-subtree-into-container this (portal-render-children (fp/children this)) node)))
-
-   :componentDidUpdate
+   :shouldComponentUpdate
    (fn [this _ _]
-     (let [node (gobj/get this "node")]
-       (render-subtree-into-container this (portal-render-children (fp/children this)) node)))}
+     true)}
 
-  (dom/noscript))
+  (if (fp/get-state this :mounted?)
+    (when-let [node (gobj/get this "node")]
+      (ReactDOM/createPortal
+       (portal-render-children (fp/children this))
+       node))
+    (dom/noscript)))
 
 (def portal (fp/factory Portal))
 
