@@ -16,9 +16,8 @@
     [nubank.workspaces.model :as wsm]
     [nubank.workspaces.ui :as ui]
     [nubank.workspaces.ui.core :as uc]
-    ["react-dom" :refer (unmountComponentAtNode)]))
+    ["react-dom/client" :as ReactDOMClient]))
 
-; region portal
 
 (s/def ::root any?)
 (s/def ::wrap-root? boolean?)
@@ -31,6 +30,13 @@
 
 (defonce css-components* (atom #{}))
 (defonce persistent-apps* (atom {}))
+
+(defn debug-node [node prefix]
+  (let [node-info {:node node
+                   :id (.-id node)
+                   :class-name (.-className node)}]
+    (println prefix node-info)
+    node-info))
 
 (defn gen-css-component []
   (let [generated-name (gensym)
@@ -61,7 +67,7 @@
                               Root     (-> Root fc/class->registry-key fc/registry-key->class)
                               factory  (fc/factory Root)
                               computed (fc/shared this ::computed)]
-                          (if (seq root)
+                          (when (seq root)
                             (factory (cond-> root computed (fc/computed computed))))))})))
 
 (defn fulcro-initial-state [{::keys [initial-state wrap-root? root root-state]
@@ -78,121 +84,149 @@
         db         (tree->db Root wrapped true (f.merge/pre-merge-transform {}))]
     db))
 
-(defn upsert-app [{::keys                    [app persistence-key computed]
-                   :fulcro.inspect.core/keys [app-id]
-                   :as                       config}]
+(defn upsert-app [{::keys [app persistence-key computed] :fulcro.inspect.core/keys [app-id] :as config}]
+  (println "Upserting app:"
+             {:persistence-key persistence-key
+              :app-id app-id})
+
   (if-let [instance (and persistence-key (get @persistent-apps* persistence-key))]
-    instance
-    (let [app      (cond-> app
-                     (not (contains? app :initial-state))
-                     (assoc :initial-db (fulcro-initial-state config))
+    (do
+      (println "Found existing app instance for key" persistence-key)
+      instance)
+    (let [app (cond-> app
+                (not (contains? app :initial-state))
+                (assoc :initial-db (fulcro-initial-state config))
 
-                     computed
-                     (update :shared assoc ::computed computed)
+                computed
+                (update :shared assoc ::computed computed)
 
-                     app-id
-                     (assoc-in [:initial-db :fulcro.inspect.core/app-id] app-id))
-          ;; TASK: explicit initial state handling
+                app-id
+                (assoc-in [:initial-db :fulcro.inspect.core/app-id] app-id))
           instance (with-react18 (fapp/fulcro-app app))]
-      (if persistence-key (swap! persistent-apps* assoc persistence-key instance))
+      (println "Created new app instance"
+                 {:persistence-key persistence-key
+                  :app-id app-id})
+      (when persistence-key
+        (swap! persistent-apps* assoc persistence-key instance))
       instance)))
 
 (defn dispose-app [{::keys [persistence-key] :as app}]
-  (if persistence-key (swap! persistent-apps* dissoc persistence-key))
+  (println "Disposing app:"
+             {:persistence-key persistence-key
+              :app-uuid (fi.client/app-uuid app)})
+
+  (when persistence-key
+    (swap! persistent-apps* dissoc persistence-key))
   (when-let [app-uuid (fi.client/app-uuid app)]
     (fi.client/dispose-app app-uuid)))
 
-(defn refresh-css! []
-  (cssi/upsert-css "fulcro-portal-css" {:component (gen-css-component)}))
+;; region CSS management
+(def debounced-refresh-css!
+  (gfun/debounce #(cssi/upsert-css "fulcro-portal-css" {:component (gen-css-component)}) 100))
 
 (defn add-component-css! [comp]
   (swap! css-components* conj comp)
-  (refresh-css!))
+  (debounced-refresh-css!))
 
 (defn mount-at [app {::keys [root wrap-root? persistence-key] :or {wrap-root? true}} node]
+  (println "Mount-at called with:"
+             {:persistence-key persistence-key
+              :wrap-root? wrap-root?
+              :node (debug-node node "")})
+
   (add-component-css! root)
   (let [instance (if wrap-root? (make-root root) root)
         new-app  (fapp/mount! app instance node {:initialize-state? false})]
-    (if persistence-key
+    (when persistence-key
+      (println "Persisting app for key" persistence-key)
       (swap! persistent-apps* assoc persistence-key new-app))
     new-app))
+
+
 
 (fc/defsc FulcroPortal
   [this {::keys [root-node-props]}]
   {:componentDidMount
    (fn [this]
      (let [props (fc/props this)
-           app   (upsert-app props)]
+           app   (upsert-app props)
+           node  (dom/node this)]
+       (println "FulcroPortal mounted:"
+                  {:props props
+                   :node (debug-node node "")})
        (gobj/set this "app" app)
-       (mount-at app props (dom/node this))))
+       (mount-at app props node)))
 
    :componentDidUpdate
-   (fn [this _ _] (some-> (gobj/get this "app") fapp/force-root-render!))
+   (fn [this _ _]
+     (println "FulcroPortal updated")
+     (when-let [app (gobj/get this "app")]
+       (fapp/force-root-render! app)))
 
    :componentWillUnmount
    (fn [this]
-     (let [app (gobj/get this "app")]
+     (let [app  (gobj/get this "app")
+           node (dom/node this)]
+       (println "FulcroPortal will unmount:"
+                  {:node (debug-node node "")})
        (dispose-app app)
-       (reset! app nil)
-       (unmountComponentAtNode (dom/node this))))
+       (reset! app nil)))
 
    :shouldComponentUpdate
    (fn [this _ _] false)}
 
   (dom/div root-node-props))
 
+
 (def fulcro-portal* (fc/factory FulcroPortal))
 
 (defn fulcro-portal
-  "Create a new portal for a Fulcro app, available options:
+  "Create a new portal for a Fulcro app. Available options:
 
   ::root - the root component to be mounted
-  ::app This is the app configuration, same options you could send to `fulcro/new-fulcro-client`
-  ::wrap-root? - by default the portal expects a component with ident to be mounted and
-  the portal will wrap that with an actual root (with no ident), if you wanna provide
-  your own root, set this to `false`
-  ::initial-state - Accepts a value or a function. A value will be used to call the
-  initial state function of your root. If you provide a function, the value returned by
-  it will be the initial state.
-  ::root-state - This map will be merged into the app root state to be part of the initial
-  state in the root, this is useful to set things like `:ui/locale` considering
-  ::computed - send computed props to the root
-  ::root-node-props - use this to send props into the root note created to mount the
-  portal on."
+  ::app - app configuration, same options as fulcro/new-fulcro-client
+  ::wrap-root? - (default true) wraps component with ident in an actual root
+  ::initial-state - value or function for initial state
+  ::root-state - map merged into app root state
+  ::computed - computed props for root
+  ::root-node-props - props for root DOM node"
   [component options]
   (fulcro-portal* (assoc options ::root component)))
 
-; endregion
-
-; region card definition
-
+;; region card implementation
 (defn inspector-set-app [card-id]
-  (let [{::keys [app]} (data/active-card card-id)
-        app-uuid (fi.client/app-uuid app)]
-    (if app-uuid
+  (when-let [{::keys [app]} (data/active-card card-id)]
+    (when-let [app-uuid (fi.client/app-uuid app)]
       (fi.client/set-active-app app-uuid))))
-
-(def debounced-refresh-css!
-  (gfun/debounce refresh-css! 100))
 
 (defn fulcro-card-init
   [{::wsm/keys [card-id]
     :as        card}
    config]
+  (println "Initializing Fulcro card:"
+             {:card-id card-id
+              :config config})
+
   (let [app (upsert-app (assoc config :fulcro.inspect.core/app-id card-id))]
     (ct.util/positioned-card card
       {::wsm/dispose
        (fn [node]
-         (dispose-app app)
-         (unmountComponentAtNode node))
+         (println "Disposing card:"
+                    {:card-id card-id
+                     :node (debug-node node "")})
+         (dispose-app app))
 
        ::wsm/refresh
        (fn [_]
+         (println "Refreshing card:" {:card-id card-id})
          (debounced-refresh-css!)
          (fapp/force-root-render! app))
 
        ::wsm/render
        (fn [node]
+         (println "Rendering card:"
+                    {:card-id card-id
+                     :node (debug-node node "")})
          (swap! data/active-cards* assoc-in [card-id ::app] app)
          (mount-at app config node))
 
@@ -215,8 +249,6 @@
   :args (s/cat :config (s/keys
                          :req [::root]
                          :opt [::wrap-root?
-                               ::app
-                               ::initial-state]))
+                              ::app
+                              ::initial-state]))
   :ret ::wsm/card-instance)
-
-; endregion
