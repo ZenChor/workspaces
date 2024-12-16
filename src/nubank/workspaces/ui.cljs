@@ -851,9 +851,11 @@
 
 (def card-index-listing (comp/factory CardIndexListing {:keyfn ::wsm/card-id}))
 
-(comp/defsc WorkspaceIndexListing [_ _]
+(comp/defsc WorkspaceIndexListing [this props]
   {:ident [::workspace-id ::workspace-id]
-   :query [::workspace-id ::workspace-title ::wsm/workspace-static?]})
+   :query [::workspace-id ::workspace-title ::wsm/workspace-static?]
+   :componentDidMount (fn [this]
+                       (println "WorkspaceIndexListing mounted:" (comp/props this)))})
 
 (def workspace-index-listing (comp/factory WorkspaceIndexListing {:keyfn ::workspace-id}))
 
@@ -1068,6 +1070,8 @@
 
     (if (::show-index? settings)
       (let [{uis false tests true} (group-by (comp true? ::wsm/test?) cards)]
+        (println "CSS Component:" WorkspacesRoot)
+        (println "Style injection:" (cssi/style-element {:component WorkspacesRoot}))
         (dom/div :.menu
           (dom/div :.row.header
             (dom/div "Workspaces")

@@ -203,43 +203,29 @@
   [{::wsm/keys [card-id]
     :as        card}
    config]
-  (println "Initializing Fulcro card:"
-             {:card-id card-id
-              :config config})
-
-  (let [app (upsert-app (assoc config :fulcro.inspect.core/app-id card-id))]
+  (println "Initializing Fulcro card:" card-id config)
+  (let [app (-> config
+                (assoc :fulcro.inspect.core/app-id card-id)
+                upsert-app)]
     (ct.util/positioned-card card
       {::wsm/dispose
        (fn [node]
-         (println "Disposing card:"
-                    {:card-id card-id
-                     :node (debug-node node "")})
+         (println "Disposing card:" card-id)
          (dispose-app app))
 
        ::wsm/refresh
        (fn [_]
-         (println "Refreshing card:" {:card-id card-id})
+         (println "Refreshing card:" card-id)
          (debounced-refresh-css!)
          (fapp/force-root-render! app))
 
        ::wsm/render
        (fn [node]
-         (println "Rendering card:"
-                    {:card-id card-id
-                     :node (debug-node node "")})
+         (println "Rendering card:" card-id "initial-state:" (fapp/current-state app))
          (swap! data/active-cards* assoc-in [card-id ::app] app)
          (mount-at app config node))
 
-       ::wsm/render-toolbar
-       (fn []
-         (dom/div
-           (uc/button {:onClick #(inspector-set-app card-id)}
-             "Inspector")
-           (uc/button {:onClick #(ui/restart-card card-id)}
-             "Restart")))
-
-       ::app
-       app})))
+       ::app app})))
 
 (defn fulcro-card [config]
   {::wsm/init
