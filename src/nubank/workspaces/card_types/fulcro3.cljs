@@ -225,6 +225,14 @@
          (swap! data/active-cards* assoc-in [card-id ::app] app)
          (mount-at app config node))
 
+       ::wsm/render-toolbar
+       (fn []
+         (dom/div
+           (uc/button {:onClick #(inspector-set-app card-id)}
+             "Inspector")
+           (uc/button {:onClick #(ui/restart-card card-id)}
+             "Restart")))
+
        ::app app})))
 
 (defn fulcro-card [config]
